@@ -1,0 +1,299 @@
+\documentclass[12pt]{article}
+
+% Bibliography preamble
+%\usepackage{apacite}
+\usepackage{cite}
+%\usepackage[numbers,sort&compress]{natbib}
+
+% Bullet preamble
+\renewcommand{\labelitemi}{$\bullet$}
+\renewcommand{\labelitemii}{$\diamond$}
+\renewcommand{\labelitemiii}{$\circ$}
+
+%\usepackage{lipsum}
+\usepackage[margin=1in,left=1in,includefoot]{geometry}
+\usepackage[hidelinks]{hyperref} % Allows for clickable references
+
+\usepackage[none]{hyphenat} % Stop breaking up words in a table
+\usepackage{array} % Allows for control of float positions
+\newcolumntype{$}{>{\global\let\currentrowstyle\relax}}
+\newcolumntype{^}{>{\currentrowstyle}}
+\newcommand{\rowstyle}[1]{\gdef\currentrowstyle{#1}#1\ignorespaces}
+
+%Graphics preamble
+\usepackage{graphicx} % Allows you to import images
+\usepackage{float} % Allows for control of float positions
+
+% Math preamble
+\usepackage{xfrac} % Allow for slanted fractions
+\usepackage{physics}
+
+% Header and Footer Stuff
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhead{}
+\fancyfoot{}
+\fancyfoot[R]{\thepage}
+%\renewcommand{\headrulewidth}{1pt}
+%\renewcommand{\footrulewidth}{1pt}
+
+\begin{document}
+%\title{Tabias, the Amazing Groundhog: The Report}
+%\author{theZanshow}
+%\date{June 26, 2014}
+%\maketitle
+
+\begin{titlepage}
+	\begin{center}
+	\line(1,0){500}\\
+	[0.25in]
+	\huge{\bfseries CAAM520 Computational Science}\\
+	[2mm]
+	\line(1,0){500}\\
+	[1.5cm]
+	\textsc{\LARGE Homework 1}\\
+	[8cm] 
+	\end{center}
+	\begin{flushright}
+	\textsc{\large AO CAI \\
+	\ S01255664\\
+	Earth Science Department\\
+	Rice University\\
+	Jan 30, 2019\\}
+	\end{flushright}
+
+\end{titlepage}
+
+%Front matter stuff
+\pagenumbering{roman}
+
+%This is table of contents stuff
+\tableofcontents
+\thispagestyle{empty}
+\cleardoublepage
+
+%This is main body stuff
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\section{Introduction}\label{sec:intro}
+The Goal is to solve the matrix system {\bfseries$Au=b$} resulting from an $(N+2)\times(N+2)$ 2D finite difference method for Laplace's equation $-\left(\pdv[2]{u}{x} + \pdv[2]{u}{y} \right) = f(x,y)$ on $[-1,1]^2$. At each point $(x_i,y_i)$, derivatives are approximated by:
+$$\pdv[2]{u}{x} \approx \frac{u_{i+1,j}-2u_{i,j}+u_{i-1,j}}{h^2}, \pdv[2]{u}{y} \approx \frac{u_{i,j+1}-2u_{i,j}+u_{i,j-1}}{h^2}$$
+where $h = 2/(N+1)$. Assuming zero boundary conditions $u(x,y) = 0$ reduce this to an $N \times N$ system for the interior nodes.
+
+\section{Forward modeling}
+The first problem to be solved is apply the Finite difference (FD) matrix {\bfseries$A$} to the wavefield {\bfseries$u$}. In order to save the computational storage, I would like to directly compute the response of $Au$ instead of computing and storing the A matrix. For the grids that are not near the boundaries. The FD operator is:
+$$-\left(\pdv[2]{u}{x} + \pdv[2]{u}{y} \right) \approx \frac{4u_{i,j}-u_{i,j+1}-u_{i+1,j}-u_{i-1,j}-u_{i,j-1}}{h^2} $$
+For the grids on the different boundaries, the operator changes correspondingly:
+$$-\left(\pdv[2]{u}{x} + \pdv[2]{u}{y} \right) \approx$$
+left boundary
+$$\frac{4u_{i,j}-u_{i,j+1}-u_{i+1,j}-u_{i,j-1}}{h^2}$$
+right boundary
+$$\frac{4u_{i,j}-u_{i,j+1}-u_{i-1,j}-u_{i,j-1}}{h^2}$$
+top boundary
+$$\frac{4u_{i,j}-u_{i,j+1}-u_{i+1,j}-u_{i-1,j}}{h^2}$$
+bottom boundary
+$$\frac{4u_{i,j}-u_{i+1,j}-u_{i-1,j}-u_{i,j-1}}{h^2}$$
+Therefore, the Implementation of the forward modeling can be written as:\\
+\\
+$FD = 4 \times u_{i,j}$\\
+If $ i>1, FD = FD - u_{i-1,j}$ \\
+If $ i<N, FD = FD - u_{i+1,j}$ \\
+If $ j>1, FD = FD - u_{i,j-1}$ \\
+If $ j<N, FD = FD - u_{i,j+1}$ \\
+\\
+The implementation of the operator is written in the function computeAu.
+
+\section{Weighted Jacobi method}
+The weighted Jacobi method use the following algorithm:
+$$x^{(k+1)} = \omega D^{-1}(b-Rx^{(k)}) + (1-\omega)x^{(k)}$$
+To verify the code, for a small $N=2$ (4 interior nodes) grid, we have four variables $u_1$,$u_2$,$u_3$,$u_4$, where the linear equations is $h = 2/3$:
+$$4 \times u_1 -u_2 -u_3 = \frac{-\sqrt{3}}{2} \times \frac{-\sqrt{3}}{2} \times \frac{4}{9}= \frac{1}{3}$$
+$$4 \times u_2 -u_1 -u_4 = -\frac{1}{3}$$
+$$4 \times u_3 -u_1 -u_4 = -\frac{1}{3}$$
+$$4 \times u_4 -u_2 -u_3 = \frac{1}{3}$$
+The solution is: $u_1 = u_4 = 0.05556, u_2 = u_3 = -0.05556$
+
+% Here we insert our figure
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1in]{C:/Users/aocai/OneDrive/Desktop/Fig1.JPG}
+	\caption[Optional caption]{Verify Jacobi method on N=2 situation}
+	\label{fig:1}
+\end{figure}
+Figure \ref{fig:1} shows the numerical results computing using the executable file HW1Jacob with $N=2$, which verifies the code. For the other numerical methods, I also verified the code with $N=2$ but will not listed in the following sections.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/Fig2.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100 situation}
+	\label{fig:2}
+\end{figure}
+Figure \ref{fig:2} shows the numerical results computing using the executable file HW1Jacob with $N=100$. It takes 10225 iterations for the algorithm to reach the tolerant misfit, the computing time is $2.89(s)$
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/Jacob.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=1000 situation}
+	\label{fig:3}
+\end{figure}
+
+For the situation with $N=1000$, the convergence speed is too slow that I spent $ 2932 (s)$ but the misfit was still away from the tolerance. The limitation for the Weighted Jacobi method is the computational run time.\\
+
+Finally, I will make a operation counts for the weighted Jacob method. Assuming the multiplication between zero elements is trivial, the first step we need to compute the product of off-diagonal matrix U and wavefield u. There are $4\times(N-1)\times3$ subtractions for points on the edge, $4\times2$ subtractions for points in the corner, and $(N-2)\times(N-2)\times4$ subtractions for the inner points.\\
+For computing $Uu$ $4{(N-2)}^2 + 12(N-1) +8 = 4N^2-4N+12 $\\
+For computing $b-Uu$ $N \times N$ subtractions\\
+For computing $D^{-1}(b-Uu)$ $ N \times N$ divisions \\
+Updating $u_{(k+1)}$ two multiplications and one summation for all elements $3\times N\times N$\\
+Total operations per iteration: $9N^2 - 4N +12$
+ 
+\section{Gauss-Seidel method}
+The Gauss-Seidel method uses the following equations:
+$${x_i}^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j=1}^{i-1}a_{ij}{x_j}^{(k+1)} -\sum_{j=i+1}^{n}a_{ij}{x_j}^{(k)} \right), i= 1,2,...,N$$
+We first compute the product of upper triangular matrix U and wavefield u, and then compute the b-Ux. Finally, we update the solution u by computing the inverse of lower triangular matrix using forward substitution. The numerical computing results are provided below:
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/Fig3.JPG}
+	\caption[Optional caption]{Gauss-Seidel method on N=100 situation}
+	\label{fig:4}
+\end{figure}
+Figure \ref{fig:4} shows the numerical results computing using the executable file HW1Gauss-Seidel with $N=100$. It takes 2712 iterations for the algorithm to reach the tolerant data misfit. The model misfit is the difference to the analytical solution. The computing time is $0.87(s)$, which is faster than the weighted Jacobi method.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1in]{C:/Users/aocai/OneDrive/Desktop/Gauss_Seidel.JPG}
+	\caption[Optional caption]{Gauss-Seidel method on N=1000 situation}
+	\label{fig:5}
+\end{figure}
+
+For the situation with $N=1000$, the convergence speed is too slow that I spent $ 3242 (s)$ but the misfit was still away from the tolerance. The limitation for the Gauss-Seidel method is the computational run time.\\
+
+Finally, I will make a operation counts for the Gauss-Seidel method. Assuming the multiplication between zero elements is trivial, the first step we need to compute the product of upper-triangular matrix U and wavefield u. There are $2\times(N-1)$ subtractions for points on the right edge and bottom, and $(N-1)\times(N-1)\times2$ subtractions for the inner points.\\
+For computing $Uu$ $2{(N-1)}^2 + 2(N-1) = 2N(N-1)$\\
+For computing $b-Uu$ $N \times N$ subtractions\\
+For computing $L^{-1}(b-Uu)$ 1 division for the first point; 1 subtraction, 1 division for the 2 to N point; 2 subtraction, 1 division for the N+1 to N*N points, $3N^2-N-1$ in total.  \\
+Total operations per iteration: $6N^2 - 3N -1$
+
+\section{Successive over-relaxation (SOR) method}
+The SOR method uses the following equations:
+$${x_i}^{(k+1)} = (1-\omega){x_i}^{(k)} + \frac{\omega}{a_{ii}} \left( b_i - \sum_{j=1}^{i-1}a_{ij}{x_j}^{(k+1)} -\sum_{j=i+1}^{n}a_{ij}{x_j}^{(k)} \right), i= 1,2,...,N$$
+Where the $omega$ is called the relaxation factor. The method goes back to Gauss-Seidel method when $\omega=0$. We first compute the product of upper triangular matrix U and wavefield u, and then compute the b-Ux. Finally, we update the solution u by computing the linear combination of updates from Gauss-Seidel method and solution u at last time step. The numerical computing results are provided below, the relaxation factor is $\omega = 0.9$:
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/Fig4.JPG}
+	\caption[Optional caption]{Successive over-relaxation method on N=100 situation}
+	\label{fig:6}
+\end{figure}
+Figure \ref{fig:6} shows the numerical results computing using the executable file HW1SOR1 with $N=100$. It takes 3260 iterations for the algorithm to reach the tolerant misfit, the computing time is $1.08(s)$, which is faster than the weighted Jacobi method but slower than the Gauss-Seidel method. This is because the $A$ matrix is well-posed, and the system is linear. The relaxation of the equation will mainly slow down the convergence speed. The limitation of SOR method is also the computational run time.\\
+
+Finally, I will make a operation counts for the SOR method. 
+For computing Gauss-Seidel updates $6N^2 - 3N -1$ 
+Updating $u_{(k+1)}$ two multiplications and one summation for all elements $3\times N\times N$\\
+Total operations per iteration: $9N^2 - 3N -1$\\
+
+But we don't see a increase of computing time from Gauss-Seidel method to SOR method, there might be some optimization for computing the product of scalar with vector.
+
+\section{Conjugate gradient (CG) method}
+The algorithm is described below for solving our problem $Au=b$:
+$$r_0 = b - Au_0 $$
+$$p_0 = r_0 $$
+$$k = 0$$
+while $\left|| r_k \right|| >= tol $
+$${\alpha}_k = \frac{{r_k}^T r_k}{{p_k}^T Ap_k}$$
+$$u_{k+1} = u_k +{\alpha}_k p_k$$
+$$r_{k+1} = r_k -{\alpha}_k Ap_k$$
+$${\beta}_k = \frac{{r_{k+1}}^T{r_{k+1}}}{{r_k}^Tr_k}$$
+$$p_{k+1} = r_{k+1} + \beta_kp_k$$
+$$k=k+1$$
+From the algorithm of CG method, we can estimate that because the algorithm uses the gradient information and has approximate the Hessian matrix, if the equation is linear, it may take 1 iteration for the CG method to find out the solution. The numerical examples demonstrate our estimation. The main problem for the CG method is the storage limitations as we have the extra variables $r_k$ and $p_k$ to store while optimize the least squares.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/Fig5.JPG}
+	\caption[Optional caption]{Conjugate gradient method on N=100 situation}
+	\label{fig:7}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/Fig6.JPG}
+	\caption[Optional caption]{Conjugate gradient method on N=1000 situation}
+	\label{fig:8}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/Fig7.JPG}
+	\caption[Optional caption]{Conjugate gradient method on N=5000 situation}
+	\label{fig:9}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/Fig8.JPG}
+	\caption[Optional caption]{Conjugate gradient method on N=10000 situation}
+	\label{fig:10}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/Fig9.JPG}
+	\caption[Optional caption]{Conjugate gradient method on N=20000 situation}
+	\label{fig:11}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/Fig10.JPG}
+	\caption[Optional caption]{Conjugate gradient method on N=40000 situation}
+	\label{fig:12}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.35in]{C:/Users/aocai/OneDrive/Desktop/Fig11.JPG}
+	\caption[Optional caption]{Conjugate gradient method on N=50000 situation}
+	\label{fig:13}
+\end{figure}
+From the above figures, we can find that the memory will corrupt when $N=50000$ and the computing time of conjugate gradient method is increasing as the order of $N^2$ for different N values. But no matter what N values we are using, the conjugate gradient method will reach the ideal misfit tolerance with one iteration. This is because the CG method is based on gradient and approximate Hessian that can converge in one iteration for the well-posed linear equations.
+
+% Our first table
+\begin{table}[H]
+	\centering
+	\label{tab:cg}
+	\begin{tabular}{lcr}
+	\bfseries N value & Computing time (s)\\ \hline
+	1000 & 0.190\\
+	5000 & 4.870\\
+	10000 & 19.500\\
+	20000 & 78.060\\
+	40000 & 312.190\\
+	\end{tabular}
+	\caption[This is optional caption, without reference]{Table for computing time using Conjugate gradient method}
+\end{table}
+Table 1 logs computing time requirements for Conjugate Gradient method at different N value. The computing time of conjugate gradient method is increasing approximately as the order of $N^2$ for different N values.\\
+
+Finally, I will make the estimations for memory requirements and computing operations for Conjugate gradient method.\\
+
+For memory requirements, I am writing in double precision (64 bit/8 bytes), we have the equations $b$,  variables $u_k$, $r_k$, $p_k$ and working matrix $temp$ to store, the storage requirements for the other variables are trivial.
+The storage requirements are approximately:
+$$5 \times N \times N \times sizeof(double) = 320N^2 (bits)$$
+For N = 50000, we need $$8\times {10}^{11} (bits) \approx 93.1 (gigabytes/GB)$$
+
+Finally, for operation counts, first consider the product of FD operator matrix A and wavefield u. There are $N \times N multiplications for diagonal items$ $4\times(N-1)\times3$ subtractions for points on the edge, $4\times2$ subtractions for points in the corner, and $(N-2)\times(N-2)\times4$ subtractions for the inner points. Therefore, computing $Au$ needs: $N^2 + 4{(N-2)}^2 + 12(N-1) +8 = 5N^2-4N+12 $ operations.\\\\
+For computing ${\alpha}_k = \frac{{r_k}^T r_k}{{p_k}^T Ap_k}$: $2N^2$ multiplications, $2N^2 - 2$ summation, compute $Ap_k$ for $5N^2 -4N+12$, 1 division;\\\\
+For computing $u_{k+1} = u_k +{\alpha}_k p_k$: $N^2$ summation and $N^2$ multiplications;\\\\
+For computing $r_{k+1} = r_k -{\alpha}_k Ap_k$: $N^2$ subtractions and $N^2$ multiplications, $Ap_k$ has been stored in working matrix already;\\\\
+For computing ${\beta}_k = \frac{{r_{k+1}}^T{r_{k+1}}}{{r_k}^Tr_k}$: $2N^2$ multiplications, $2N^2 - 2$ summation, 1 division;\\\\
+For computing $p_{k+1} = r_{k+1} + \beta_kp_k$ : $N^2$ summation and $N^2$ multiplications.\\\\
+Total operation number per iteration is: $19N^2-4N+10$
+
+%\bibliographystyle{IEEEtran}
+%\bibliographystyle{apacite}
+%\bibliography{References}
+%\addcontentsline{toc}{section}{\numberline{}References}
+%\cleardoublepage
+
+\end{document}
