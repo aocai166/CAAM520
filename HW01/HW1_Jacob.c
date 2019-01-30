@@ -71,7 +71,7 @@ void compute_xk(double *u, double *temp, double *b, int N, double weight)
 }
 
 int main(int argc, char **argv){
-	int N = 100;
+	int N = 1000;
 	int ii, ix, iz, iter, niter;
 	double h, tmp, tmpx, tmpz, obj, objm, weight, tol; // objective function & model difference objective
 	double *u, *u0, *b, *temp; // A is the differential matrix and b is the source function
@@ -110,15 +110,17 @@ int main(int argc, char **argv){
 		memset(temp, 0.0, N*N*sizeof(double));
 		compute_Ru(temp, u, N);
 		compute_xk(u, temp, b, N, weight);
-		if((iter%100)==0){
+		if((iter%1000)==0){
 			printf("The objective at iter %d is: %12.11f\n",iter,obj);
-			printf("The model objective at iter %d is: %12.11f\n",iter,objm);
+			//printf("The model objective at iter %d is: %12.11f\n",iter,objm);
 		}
 		iter = iter+1;
 	}
 	stop=clock(); // record stopping time
 	printf("The final objective at iter %d is: %12.11f\n",iter-1,obj);
-	printf("The final model objective at iter %d is: %12.11f\n",iter-1,objm);
+	//printf("The final model objective at iter %d is: %12.11f\n",iter-1,objm);
+	if(N==2)printf("The numerical solution u1=%f u2=%f u3=%f u4=%f\n",u[0],u[1],u[2],u[3]);
+	if(N==2)printf("The b matrix b1=%f b2=%f b3=%f b4=%f\n",b[0],b[1],b[2],b[3]);
 	printf("The Total computing time is: %f(s)\n",((float)(stop-start))/CLOCKS_PER_SEC);
 	
 	free(u);
