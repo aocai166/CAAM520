@@ -1,0 +1,274 @@
+\documentclass[12pt]{article}
+
+% Bibliography preamble
+%\usepackage{apacite}
+\usepackage{cite}
+%\usepackage[numbers,sort&compress]{natbib}
+
+% Bullet preamble
+\renewcommand{\labelitemi}{$\bullet$}
+\renewcommand{\labelitemii}{$\diamond$}
+\renewcommand{\labelitemiii}{$\circ$}
+
+%\usepackage{lipsum}
+\usepackage[margin=1in,left=1in,includefoot]{geometry}
+\usepackage[hidelinks]{hyperref} % Allows for clickable references
+
+\usepackage[none]{hyphenat} % Stop breaking up words in a table
+\usepackage{array} % Allows for control of float positions
+\newcolumntype{$}{>{\global\let\currentrowstyle\relax}}
+\newcolumntype{^}{>{\currentrowstyle}}
+\newcommand{\rowstyle}[1]{\gdef\currentrowstyle{#1}#1\ignorespaces}
+
+%Graphics preamble
+\usepackage{graphicx} % Allows you to import images
+\usepackage{float} % Allows for control of float positions
+
+% Math preamble
+\usepackage{xfrac} % Allow for slanted fractions
+\usepackage{physics}
+
+% Header and Footer Stuff
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhead{}
+\fancyfoot{}
+\fancyfoot[R]{\thepage}
+%\renewcommand{\headrulewidth}{1pt}
+%\renewcommand{\footrulewidth}{1pt}
+
+\begin{document}
+%\title{Tabias, the Amazing Groundhog: The Report}
+%\author{theZanshow}
+%\date{June 26, 2014}
+%\maketitle
+
+\begin{titlepage}
+	\begin{center}
+	\line(1,0){500}\\
+	[0.25in]
+	\huge{\bfseries CAAM520 Computational Science}\\
+	[2mm]
+	\line(1,0){500}\\
+	[1.5cm]
+	\textsc{\LARGE Homework 2}\\
+	[8cm] 
+	\end{center}
+	\begin{flushright}
+	\textsc{\large AO CAI \\
+	\ S01255664\\
+	Earth Science Department\\
+	Rice University\\
+	Feb 17, 2019\\}
+	\end{flushright}
+
+\end{titlepage}
+
+%Front matter stuff
+\pagenumbering{roman}
+
+%This is table of contents stuff
+\tableofcontents
+\thispagestyle{empty}
+\cleardoublepage
+
+%This is main body stuff
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\section{Introduction}\label{sec:intro}
+The Goal is to solve the matrix system {\bfseries$Au=b$} resulting from an $(N+2)\times(N+2)$ 2D finite difference method for Laplace's equation $-\left(\pdv[2]{u}{x} + \pdv[2]{u}{y} \right) = f(x,y)$ on $[-1,1]^2$. At each point $(x_i,y_i)$, derivatives are approximated by:
+$$\pdv[2]{u}{x} \approx \frac{u_{i+1,j}-2u_{i,j}+u_{i-1,j}}{h^2}, \pdv[2]{u}{y} \approx \frac{u_{i,j+1}-2u_{i,j}+u_{i,j-1}}{h^2}$$
+where $h = 2/(N+1)$. Assuming zero boundary conditions $u(x,y) = 0$ reduce this to an $N \times N$ system for the interior nodes.
+
+\section{MPI Implementation}
+To implement the parallel computing for the Poisson's equaion, I first divide the matrix into blocks based on the number of processors are used. When the total problem is of size $N\times N$ (without the zero-boundaries), I distributed the original wavefield into different processors. The size of the new wavefield is:
+$$ sizeof(u) = N*nub*sizeof(double) $$
+where $nub = node + 2$ if the rank of processor is less than $size-1$, or $ nub = node + res +2 $ for the last processor $rank = size -1$. The node is the integer of $ \frac{N}{size}$ and nres is the residual of $mod(N,size)$. Then, I am able to allocate the memory of u in the different processor evenly. The extra 2 layer in each processor is used to communicate the information between each processors. Since after each iteration, the wavefield in the top layer and bottom layer should be updated based on the information from other processors.
+The FD operations in each layer is the same:
+$$-Ru \approx \frac{-u_{i,j+1}-u_{i+1,j}-u_{i-1,j}-u_{i,j-1}}{h^2} $$
+The after this computing, the wavefield on each node is updated with
+$$u^{(k+1)} = \omega D^{-1}(b-Ru^{(k)}) + (1-\omega)u^{(k)}$$
+The wavefield is updated in the internal grids from index $ 0 $ to $ N $ in x direction and from $1$ to $nub-1$ in the z direction.
+
+Figure 1 in the following shows how the parallelism functions in the $MPIJacob.c$. Every processor has a memory block of u with size $u[N][nub]$. The shadow area is the position of active variable, each of them represent part of the total wavefield u. The last layer on processer k-1 serves as the bottom boundary, we want it to communicate with the layer $1$ in the processor k (not the top boundary). Besides, in the processor k, the top boundary needs to be updated base on the value of layer $nub-1$ in the processor k-1.The psudocode is working as (psudocode):
+$$while (obj >= tol, iter < itermax) $$
+update the wavefield on each processors based on
+$$u^{(k+1)} = \omega D^{-1}(b-Ru^{(k)}) + (1-\omega)u^{(k)}$$
+After that:\\\\
+Exchange the wavefield boundaries in different layers, send layer $1$ in proc k to the bottom boundary in proc k-1, and send layer $nub-1$ in proc k to the top boundary in proc k+1\\\\
+Use MPI Reduce to calculate the global objective funcion obj from localobj on different processors.\\\\
+Use MPI Bcast to broadcast the obj value into different processor
+$$iter = iter+1$$ 
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=3.0in]{C:/Users/aocai/OneDrive/Desktop/Sample.JPG}
+	\caption[Optional caption]{Sample plot of the communications between the layers}
+	\label{fig:1}
+\end{figure}
+
+The difficulty comes from that there are two communication pairs between proc k and proc k-1, and between proc k and proc k+1. If we use the same order of send and receive, we will come to the problem of deadlock.\\\\
+To avoid this problem, I use different order of send and receive in the even and odd ranks.\\\\
+If $mod(rank,2)==1)$\\\\
+I will first do MPI Send and then MPI Recv.\\\\
+If $mod(rank,2)==0$\\\\
+I will first do MPI Recv and then MPI Send.\\\\
+In this way, I am able to run MPI smoothly and improve the computing speed of the linear solver.\\\\
+For the debugging strategy, I use many check point in the while loop and if there is a dead lock, I will be able to know which MPI process is stucked. I will also print out some key values and processor id in the debugging steps.
+ 
+\section{Weighted Jacobi method: Numerical results}
+In this section, I will show the numerical result by runing the parallelized weighted Jacobi method. The objective function is the L2-norm of $b-Au$\\\\
+For $N=100$, the computing time by different number of processor is provided below. 
+
+% Here we insert our figure
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_1.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, Nproc=1 situation}
+	\label{fig:N1001}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_2.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, Nproc=2 situation}
+	\label{fig:N1002}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_3.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, Nproc=3 situation}
+	\label{fig:N1003}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_4.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, Nproc=4 situation}
+	\label{fig:N1004}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_5.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, Nproc=5 situation}
+	\label{fig:N1005}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_6.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, Nproc=6 situation}
+	\label{fig:N1006}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_7.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, Nproc=7 situation}
+	\label{fig:N1007}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_8.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, Nproc=8 situation}
+	\label{fig:N1008}
+\end{figure}
+Figure 2 to 9 shows the computing time for the weighted Jacobi method with different number of procs. The problem is of size $102 \times 102$ and the computing time for different parallelism is listed in the Table 1. The number of iterations for reaching the ideal misfit is approximately the same for different parallelism. For the computing time, when the number of processors is small, the improvements of computing time is obivious that I can obtain approximately $t = \frac{t_0}{Nproc}$ computing time by parallelism. However, for large N values $(N>=4)$, there is a lot of time wasted on the communication between processors. The improvments by using large number of processors are not obvious.
+
+% Our first table 
+\begin{table}[H]
+	\centering
+	\label{tab:cg}
+	\begin{tabular}{lcr}
+	\bfseries N {processors} & Computing time (s)\\ \hline
+	1 & 0.650\\
+	2 & 0.350\\
+	3 & 0.270\\
+	4 & 0.230\\
+	5 & 0.210\\
+	6 & 0.190\\
+	7 & 0.180\\
+	8 & 0.170\\
+	\end{tabular}
+	\caption[This is optional caption, without reference]{Table for computing time using Parallelized Weighted Jacobi method N=100}
+\end{table}
+
+For $N=300$, the computing time by different number of processor is provided below.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.8in]{C:/Users/aocai/OneDrive/Desktop/N300_1.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=300, Nproc=1 situation}
+	\label{fig:N3001}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.8in]{C:/Users/aocai/OneDrive/Desktop/N300_2.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=300, Nproc=2 situation}
+	\label{fig:N3002}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.8in]{C:/Users/aocai/OneDrive/Desktop/N300_3.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=300, Nproc=3 situation}
+	\label{fig:N3003}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.8in]{C:/Users/aocai/OneDrive/Desktop/N300_4.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=300, Nproc=4 situation}
+	\label{fig:N3004}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.8in]{C:/Users/aocai/OneDrive/Desktop/N300_5.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=300, Nproc=5 situation}
+	\label{fig:N3005}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.8in]{C:/Users/aocai/OneDrive/Desktop/N300_6.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=300, Nproc=6 situation}
+	\label{fig:N3006}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.8in]{C:/Users/aocai/OneDrive/Desktop/N300_7.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=300, Nproc=7 situation}
+	\label{fig:N3007}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1in]{C:/Users/aocai/OneDrive/Desktop/N300_8.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=300, Nproc=8 situation}
+	\label{fig:N3008}
+\end{figure}
+
+Figure 10 to 17 shows the computing time for the weighted Jacobi method with different number of procs. The problem is of size $302 \times 302$ and the computing time for different parallelism is listed in the Table 2. The number of iterations for reaching the ideal misfit is approximately the same for different parallelism. The new problem is approximately 9 times bigger than the first problem solving $102 \times 102$ linear equations. For the computing time, when the number of processors is small $(N<=4)$, the improvements of computing time is obivious. For instance, by using 2 processors I got the computing one half of the computing time using 1 processor. However, the performance is limited when we move to problem with large number of processors $(n>4)$. The computing time is similar between using 6, 7, and 8 processors.
+\begin{table}[H]
+	\centering
+	\label{tab:cg}
+	\begin{tabular}{lcr}
+	\bfseries N {processors} & Computing time (s)\\ \hline
+	1 & 47.390\\
+	2 & 24.180\\
+	3 & 16.470\\
+	4 & 13.200\\
+	5 & 11.090\\
+	6 & 9.410\\
+	7 & 8.830\\
+	8 & 8.220\\
+	\end{tabular}
+	\caption[This is optional caption, without reference]{Table for computing time using Parallelized Weighted Jacobi method N=300}
+\end{table}
+
+In sum, using parallelism helps improving the performance of linear solver, such as weighted Jacobi method, but for large number of processors, the computing time performance is limited due to the cost in communicating between processors. The parallelism needs to be optimized for large number of parallel processors.
+
+%\bibliographystyle{IEEEtran}
+%\bibliographystyle{apacite}
+%\bibliography{References}
+%\addcontentsline{toc}{section}{\numberline{}References}
+%\cleardoublepage
+
+\end{document}
