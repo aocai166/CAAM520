@@ -1,0 +1,19 @@
+Homework:  #2
+Student:   Ao Cai
+GitHub ID: aocai166
+
+Points: 101/100
+
+[x] Working finite difference discretization of Poisson's problem (15 pts.)
+    - As mentioned in HW1, memset() cannot be used to set double values to 1.0.
+      Please look up the documentation.
+[x] Working implementation of at least one solver (15 pts.)
+[x] Code works correctly when using multiple MPI ranks (20 pts.)
+[x] In addition to being correct, the code never stores full copies of matrices, vectors, etc. on any single process (10 pts.)
+[x] Diagram describing the partition of the grid (10 pts.)
+[x] Description of the algorithm in pseudo-code (10 pts.)
+    - Please describe the MPI communication in pseudo-code in a bit more detail. (-2 pts.)
+[x] Description of debugging strategies (optional)
+[x] Testing of the code (20 pts.)
+[x] Scalability (bonus, 5 pts.)
+    - Please also consider weak scalability. (-2 pts.)

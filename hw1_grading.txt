@@ -1,0 +1,39 @@
+Homework:  #1
+Student:   Ao Cai
+GitHub ID: aocai166
+
+Points: 82/99
+
+== Code and documentation ==
+
+Code was graded based on the file HW1_CG.c.
+- line 97: Please do not use sqrtf() for double precision numbers.
+- line 114: memset() cannot be used this way. This will not set each element of
+  the vector u to 1.0, i.e., the initial guess is wrong.
+  (-3 pts.)
+- line 162: Please report the error in the infinity norm, not in the 2-norm.
+  (-3 pts.)
+- line 163: Note that clock() returns CPU time, not elapsed real time.
+  Furthermore, CLOCKS_PER_SEC is not actually the number of clock ticks per
+  second (https://www.gnu.org/software/libc/manual/html_node/CPU-Time.html)
+- Please document your code in the report, including code snippets (see 4th item
+  on the problem sheet).
+  (-3 pts.)
+
+
+== Verification and operation counts ==
+
+- Note that multiplication with zero elements is not trivial.
+  There is at least the cost of fetching the entry from memory before we can see
+  that it is zero.
+- Please show results for N=10,20,30.
+  (-8 pts.)
+
+
+== Documentation of number of iterations, timings, and scaling results ==
+
+- The segmentation fault at N=50000 occurs, because N*N cannot be represented
+  by int. Try to use size_t instead.
+- In general, CG will take more than one iteration. The reason why it converges
+  in one iteration here is probably the incorrect initial guess.
+
