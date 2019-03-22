@@ -2,7 +2,7 @@ Homework:  #3
 Student:   Ao Cai
 GitHub ID: aocai166
 
-Points: 75/100
+Points: 87/100
 
 General remarks:
 - You refer to the solution as a "wavefield." Please note that the Poisson problem does not model waves.
@@ -15,9 +15,9 @@ General remarks:
 [x] Code uses OpenMP for parallelism (10 pts.)
 [x] Parallel code is correct and free of race conditions (10 pts.)
 [x] Discussion of OpenMP directives and their use (15 pts.)
-[ ] Discussion of code verification (15 pts.)
-    - Your results show that the errors and iteration counts are similar for different numbers of threads, but there is not discussion of the verification. (-10 pts.)
-[ ] Plots of measured parallel performance and speedups (20 pts.)
-    - Speedups and plots are missing, only the elapsed time is reported. (-10 pts.)
+[-] Discussion of code verification (15 pts.)
+    - Your results show that the iteration counts are the same for serial and OpenMP, but you do not compare the error. (-3 pts.)
+[-] Plots of measured parallel performance and speedups (20 pts.)
+    - Speedups and plots are missing, only the elapsed time is reported. (-5 pts.)
     - Performance was only evaluated for a single problem size. (-5 pts.)
 [x] Discussion of performance results (10 pts.)
