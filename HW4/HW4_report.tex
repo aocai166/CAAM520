@@ -1,0 +1,286 @@
+\documentclass[12pt]{article}
+
+% Bibliography preamble
+%\usepackage{apacite}
+\usepackage{cite}
+\usepackage{listings}
+%\usepackage[numbers,sort&compress]{natbib}
+
+% Bullet preamble
+\renewcommand{\labelitemi}{$\bullet$}
+\renewcommand{\labelitemii}{$\diamond$}
+\renewcommand{\labelitemiii}{$\circ$}
+
+%\usepackage{lipsum}
+\usepackage[margin=1in,left=1in,includefoot]{geometry}
+\usepackage[hidelinks]{hyperref} % Allows for clickable references
+
+\usepackage[none]{hyphenat} % Stop breaking up words in a table
+\usepackage{array} % Allows for control of float positions
+\newcolumntype{$}{>{\global\let\currentrowstyle\relax}}
+\newcolumntype{^}{>{\currentrowstyle}}
+\newcommand{\rowstyle}[1]{\gdef\currentrowstyle{#1}#1\ignorespaces}
+%Graphics preamble
+\usepackage{graphicx} % Allows you to import images
+\usepackage{float} % Allows for control of float positions
+% Math preamble
+\usepackage{xfrac} % Allow for slanted fractions
+\usepackage{physics}
+% Header and Footer Stuff
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhead{}
+\fancyfoot{}
+\fancyfoot[R]{\thepage}
+%\renewcommand{\headrulewidth}{1pt}
+%\renewcommand{\footrulewidth}{1pt}
+\begin{document}
+%\title{Tabias, the Amazing Groundhog: The Report}
+%\author{theZanshow}
+%\date{June 26, 2014}
+%\maketitle
+\begin{titlepage}
+	\begin{center}
+	\line(1,0){500}\\
+	[0.25in]
+	\huge{\bfseries CAAM520 Computational Science}\\
+	[2mm]
+	\line(1,0){500}\\
+	[1.5cm]
+	\textsc{\LARGE Homework 4}\\
+	[8cm] 
+	\end{center}
+	\begin{flushright}
+	\textsc{\large AO CAI \\
+	\ S01255664\\
+	Earth Science Department\\
+	Rice University\\
+	April 5, 2019\\}
+	\end{flushright}
+\end{titlepage}
+%Front matter stuff
+\pagenumbering{roman}
+%This is table of contents stuff
+\tableofcontents
+\thispagestyle{empty}
+\cleardoublepage
+%This is main body stuff
+\pagenumbering{arabic}
+\setcounter{page}{1}
+\section{Introduction}\label{sec:intro}
+The Goal is to solve the matrix system {\bfseries$Au=b$} resulting from an $(N+2)\times(N+2)$ 2D finite difference method for Laplace's equation $-\left(\pdv[2]{u}{x} + \pdv[2]{u}{y} \right) = f(x,y)$ on $[-1,1]^2$. At each point $(x_i,y_i)$, derivatives are approximated by:
+$$\pdv[2]{u}{x} \approx \frac{u_{i+1,j}-2u_{i,j}+u_{i-1,j}}{h^2}, \pdv[2]{u}{y} \approx \frac{u_{i,j+1}-2u_{i,j}+u_{i,j-1}}{h^2}$$
+where $h = 2/(N+1)$. Assuming zero boundary conditions $u(x,y) = 0$ reduce this to an $N \times N$ system for the interior nodes.
+\section{CUDA parallelism for Jacobi method}
+To implement the parallel computing for the Poisson's equaion, I write the CUDA code with the main funciton to allocate arrays and move data onto the GPU. In the code, one kernel is used to perform the Jacobi iteraion and a second kernel perform the objective function calculation using a reduction.\\\\
+I first determined the size of blocks and number of threads per block. In my first CUDA application, I used the global memory instead of shared memory implementation. Each thread will compute the update of the corresponding $u[ii]$ by using the values from surrounding nodes, extracting from global memory, this method is less computational efficient comparing with the second implementation using shared memory.\\\\
+To make a easy transit from double percision to single percision. I used the trick taught in the class. I defined the dfloat as float in all of my applications. The reduction kernel is a tree-based approach that makes the reduction within each thread block.
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=2.0in]{C:/Users/aocai/OneDrive/Desktop/Reduction.png}
+	\caption[Optional caption]{Tree-based GPU Reduction, cited from Yang et al., Geophysics, 2015}
+	\label{fig:Reduction}
+\end{figure}
+
+\lstinputlisting[language=C]{cuda_Jacobi1.cu}
+In the second implementation. I improved the performance of my code by using a shared memory implementation. When the update of the interior nodes of one row of a block is computed, the values of $u[ii]$ in its two neighboring rows are stored, that include the $u[ii-N]$ and $u[ii+N]$. This will improve the efficiency of the data I/O when computing the updates of $u$.
+
+\lstinputlisting[language=C]{cuda_Jacobi_shared1.cu}
+ 
+\section{Weighted Jacobi method: Numerical results}
+In this section, I will show the numerical result by runing the parallelized weighted Jacobi method. The objective function is the L2-norm of $b-Au$\\\\
+
+First is the verification of my code's correctness. For $N=100$, the reported errors by my serial code and the cuda code is shown below:
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.6in]{C:/Users/aocai/OneDrive/Desktop/CUDA.png}
+	\caption[Optional caption]{Reported error by CUDA global memory Implementation}
+	\label{fig:CUDA}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.6in]{C:/Users/aocai/OneDrive/Desktop/CUDAs.png}
+	\caption[Optional caption]{Reported error by CUDA shared memory Implementation}
+	\label{fig:CUDAs}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_p128r.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, thread-block 128, reading speed}
+	\label{fig:N100_p128r}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_p128.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, thread-block 128, write speed}
+	\label{fig:N100_p128w}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_p128f.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, thread-block 128, flop counts}
+	\label{fig:N100_p128f}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N500_p128r.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=500, thread-block 128, reading speed}
+	\label{fig:N500_p128r}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N500_p128.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=500, thread-block 128, write speed}
+	\label{fig:N500_p128w}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N500_p128f.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=500, thread-block 128, flop counts}
+	\label{fig:N500_p128f}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N1000_p128r.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=1000, thread-block 128, reading speed}
+	\label{fig:N1000_p128r}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N1000_p128.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=1000, thread-block 128, write speed}
+	\label{fig:N1000_p128w}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N1000_p128f.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=1000, thread-block 128, flop counts}
+	\label{fig:N1000_p128f}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_p256r.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, thread-block 256, reading speed}
+	\label{fig:N100_p256r}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_p256.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, thread-block 256, write speed}
+	\label{fig:N100_p256w}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_p256f.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, thread-block 256, flop counts}
+	\label{fig:N100_p256f}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N500_p256r.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=500, thread-block 256, reading speed}
+	\label{fig:N500_p256r}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N500_p256.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=500, thread-block 256, write speed}
+	\label{fig:N500_p256w}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N500_p256f.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=500, thread-block 256, flop counts}
+	\label{fig:N500_p256f}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N1000_p256r.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=1000, thread-block 256, reading speed}
+	\label{fig:N1000_p256r}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N1000_p256.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=1000, thread-block 256, write speed}
+	\label{fig:N1000_p256w}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N1000_p256f.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=1000, thread-block 256, flop counts}
+	\label{fig:N1000_p256f}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_p1024r.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, thread-block 1024, reading speed}
+	\label{fig:N100_p1024r}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_p1024.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, thread-block 1024, write speed}
+	\label{fig:N100_p1024w}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N100_p1024f.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=100, thread-block 1024, flop counts}
+	\label{fig:N100_p1024f}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N500_p1024r.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=500, thread-block 1024, reading speed}
+	\label{fig:N500_p1024r}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N500_p1024.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=500, thread-block 1024, write speed}
+	\label{fig:N500_p1024w}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N500_p1024f.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=500, thread-block 1024, flop counts}
+	\label{fig:N500_p1024f}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N1000_p1024r.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=1000, thread-block 1024, reading speed}
+	\label{fig:N1000_p1024r}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N1000_p1024.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=1000, thread-block 1024, write speed}
+	\label{fig:N1000_p1024w}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.5in]{C:/Users/aocai/OneDrive/Desktop/N1000_p1024f.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=1000, thread-block 1024, flop counts}
+	\label{fig:N1000_p1024f}
+\end{figure}
+In sum, using parallelism helps improving the performance of linear solver, such as weighted Jacobi method. I find out that the reading and writing speed with generally increase with larger number of the problem size $N$ and the top reading and writing speed are reached with N=1000 and p Nthreads = 1024, which means the largest thread-block size. However, the increase of the I/O is limited from $N=256$ to $N=1024$, as we are approaching the roofline of the computation resources.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=3in]{C:/Users/aocai/OneDrive/Desktop/Roofline.JPG}
+	\caption[Optional caption]{Weighted Jacobi method on N=1000, with different thread-block Roofline}
+	\label{fig:Roofline}
+\end{figure}
+
+From the roofline plot, the code is still away from the optimum.
+
+In the numerical computation, I am using the K80 GPU on the nots server. From the website, it has 480 GB/s aggregate memory bandwidth and 8.73 teraflops single-precision performance. The roofline plots are provided in the following:
+%\bibliographystyle{IEEEtran}
+%\bibliographystyle{apacite}
+%\bibliography{References}
+%\addcontentsline{toc}{section}{\numberline{}References}
+%\cleardoublepage
+\end{document}
