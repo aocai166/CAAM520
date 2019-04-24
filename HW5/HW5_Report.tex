@@ -1,0 +1,258 @@
+\documentclass[12pt]{article}
+
+% Bibliography preamble
+%\usepackage{apacite}
+\usepackage{cite}
+\usepackage{listings}
+%\usepackage[numbers,sort&compress]{natbib}
+
+% Bullet preamble
+\renewcommand{\labelitemi}{$\bullet$}
+\renewcommand{\labelitemii}{$\diamond$}
+\renewcommand{\labelitemiii}{$\circ$}
+
+%\usepackage{lipsum}
+\usepackage[margin=1in,left=1in,includefoot]{geometry}
+\usepackage[hidelinks]{hyperref} % Allows for clickable references
+
+\usepackage[none]{hyphenat} % Stop breaking up words in a table
+\usepackage{array} % Allows for control of float positions
+\newcolumntype{$}{>{\global\let\currentrowstyle\relax}}
+\newcolumntype{^}{>{\currentrowstyle}}
+\newcommand{\rowstyle}[1]{\gdef\currentrowstyle{#1}#1\ignorespaces}
+%Graphics preamble
+\usepackage{graphicx} % Allows you to import images
+\usepackage{float} % Allows for control of float positions
+% Math preamble
+\usepackage{xfrac} % Allow for slanted fractions
+\usepackage{physics}
+% Header and Footer Stuff
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhead{}
+\fancyfoot{}
+\fancyfoot[R]{\thepage}
+\begin{document}
+\begin{titlepage}
+	\begin{center}
+	\line(1,0){500}\\
+	[0.25in]
+	\huge{\bfseries CAAM520 Computational Science}\\
+	[2mm]
+	\line(1,0){500}\\
+	[1.5cm]
+	\textsc{\LARGE Homework 5}\\
+	[8cm] 
+	\end{center}
+	\begin{flushright}
+	\textsc{\large AO CAI \\
+	\ S01255664\\
+	Earth Science Department\\
+	Rice University\\
+	April 24, 2019\\}
+	\end{flushright}
+\end{titlepage}
+%Front matter stuff
+\pagenumbering{roman}
+%This is table of contents stuff
+\tableofcontents
+\thispagestyle{empty}
+\cleardoublepage
+%This is main body stuff
+\pagenumbering{arabic}
+\setcounter{page}{1}
+\section{Introduction}\label{sec:intro}
+The Goal is to solve the matrix system {\bfseries$Au=b$} resulting from an $(N+2)\times(N+2)$ 2D finite difference method for Laplace's equation $-\left(\pdv[2]{u}{x} + \pdv[2]{u}{y} \right) = f(x,y)$ on $[-1,1]^2$. At each point $(x_i,y_i)$, derivatives are approximated by:
+$$\pdv[2]{u}{x} \approx \frac{u_{i+1,j}-2u_{i,j}+u_{i-1,j}}{h^2}, \pdv[2]{u}{y} \approx \frac{u_{i,j+1}-2u_{i,j}+u_{i,j-1}}{h^2}$$
+where $h = 2/(N+1)$. Assuming zero boundary conditions $u(x,y) = 0$ reduce this to an $N \times N$ system for the interior nodes.
+\section{OpenCL parallelism for Jacobi method}
+To implement the parallel computing for the Poisson's equaion, I write the OpenCL code with the main funciton to allocate arrays and move data onto the devices. In the code, one kernel is used to perform the Jacobi iteraion and a second kernel performs reduction to compute the error. The code snippets are provided in the following:\\
+
+\lstinputlisting[language=C]{HW5_opencl.cpp}
+
+There are two major kernels in the code, the first one to present is the Jacobi kernel, where the updated u is stored at $d_{unew}$. Then the data is transferred from device to host by using the command $clEnqueueReadBuffer$, the computing time of the kernel is recorded by using $clGetEventProfilingInfo$. The implementation of the Jacobi kernel is the simplest way with out using the shared memory:
+
+\lstinputlisting[language=C]{Jacobi.cl}
+
+The next kernel is the reduction kernel to compute the sum of the error using the tree-based reduction model:
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=2.0in]{/home/aocai/Documents/caam520/HW4/Reduction.png}
+	\caption[Optional caption]{Tree-based GPU Reduction, cited from Yang et al., Geophysics, 2015}
+	\label{fig:Reduction}
+\end{figure} 
+The reduction is achieved by reduce the number of threads at every for loop, and the code snippets are listed below.
+\lstinputlisting[language=C]{reduce.cl}
+
+Till now, I have presented all the implementation for the OpenCL code, the detailed documentation for the verify cation and timing of the OpenCL code is discussed in the following chapters.
+
+\section{Verification of the code}
+I will compared my OpenCL code with the Serial and CUDA reference code online, I made some small modification to the online code to record time and present the initial error at the first iteration. To start with, I will show the platform that I am using to write this report:
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=5.0in]{/home/aocai/Pictures/Platform.png}
+	\caption[Optional caption]{The platform used for CPU and GPU OpenCL implementation}
+	\label{fig:Platform}
+\end{figure} 
+For verification of the code, I am using a small problem size with N=32, the results from serial, CUDA and OpenCL code are listed below:
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.8in]{/home/aocai/Pictures/JS32.png}
+	\caption[Optional caption]{Serial Code Jacobi method with N=32}
+	\label{fig:JS32}
+\end{figure} 
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.8in]{/home/aocai/Pictures/JCUDA32.png}
+	\caption[Optional caption]{CUDA Code Jacobi method with N=32}
+	\label{fig:JCUDA32}
+\end{figure} 
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=3.0in]{/home/aocai/Pictures/JOCPU32.png}
+	\caption[Optional caption]{OpenCL Code Jacobi method on CPU with N=32}
+	\label{fig:JOCPU32}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.2in]{/home/aocai/Pictures/JOGPU32.png}
+	\caption[Optional caption]{OpenCL Code Jacobi method on GPU with N=32}
+	\label{fig:JOGPU32}
+\end{figure}
+
+From the reported errors, all the implementations start with the initial error around 0.01515, there is a small difference between the initial error of OpenCL code and that of the Serial code. This might due to the small error during the data transformation. What's impressive, is that all the implementaions have exactly same numer of iterations to reach the tolerance of the misfit. The very close intial errors and exactly same number of iterations have demonstrated that the implementation of my OpenCL code is correct. The implementations on both CPU and GPU are efficient and accurate.
+
+\section{Jacobi method: Numerical results (Serial, CUDA, OpenCL)}
+For the OpenCL runtimes, in the N=32 case, the Jacobi and reduction execution in GPU is faster than that in CPU applications, as the following:
+\begin{table}[H]
+	\centering
+	\label{tab:N32}
+	\begin{tabular}{lcr}
+	\bfseries Kernel & CPU & GPU\\ \hline
+	Jacobi & 3.342 ms & 1.988 ms\\
+	Reduction & 4.416 ms & 2.072 ms\\
+	\end{tabular}
+	\caption[This is optional caption, without reference]{Computing time (ms) using GPU and CPU OpenCl implementation with N=32}
+\end{table}
+The faster kernel execution in GPU is under our expectation. In the following, I will compare the runtime between Serial code and OpenCL CPU implementation, and then compare the runtime between CUDA and OpenCL GPU implementation.\\\\
+{\bfseries(1) Comparison between Serial code and OpenCL CPU implementation.}\\
+I am comparing the total runtime for the CPU code and OpenCL CPU implementation with N=64, 128, 256. The computing time table is listed below:
+\begin{table}[H]
+	\centering
+	\label{tab:oclcpu}
+	\begin{tabular}{lcr}
+	\bfseries N & CPU & OpenCL CPU\\ \hline
+	64 & 0.0864 s & 0.0510 s\\
+	128 & 1.275 s & 0.439 s\\
+	256 & 18.9 s & 5.457 s\\
+	\end{tabular}
+	\caption[This is optional caption, without reference]{Computing time using CPU code and OpenCl CPU implementation with different N values}
+\end{table}
+For $N=64$, $N = 128$ and $N = 256$, I provide the support figures as following. Note that I am using the $<time.h>$ header to compute the total CPU time in OpenCL, which is actually the sum of computing time in different threads. Therefore, the computing time for OpenCL CPU code is calculated by the sum of computing time of Jacobi and Reduction kernel.
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.9in]{/home/aocai/Pictures/JS64.png}
+	\caption[Optional caption]{Serial Code Jacobi method on CPU with N=64}
+	\label{fig:JS64}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.0in]{/home/aocai/Pictures/JS128.png}
+	\caption[Optional caption]{Serial Code Jacobi method on CPU with N=128}
+	\label{fig:JS128}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.0in]{/home/aocai/Pictures/JS256.png}
+	\caption[Optional caption]{Serial Code Jacobi method on CPU with N=256}
+	\label{fig:JS256}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=2.7in]{/home/aocai/Pictures/JOCPU64.png}
+	\caption[Optional caption]{OpenCL Code Jacobi method on CPU with N=64}
+	\label{fig:JOCPU64}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=2.7in]{/home/aocai/Pictures/JOCPU128.png}
+	\caption[Optional caption]{OpenCL Code Jacobi method on CPU with N=128}
+	\label{fig:JOCPU128}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=2.7in]{/home/aocai/Pictures/JOCPU256.png}
+	\caption[Optional caption]{OpenCL Code Jacobi method on CPU with N=256}
+	\label{fig:JOCPU256}
+\end{figure}
+{\bfseries Discussion:}\\\\
+From the computing time table, we can find that the execution time using OpenCL CPU implementation is faster than the conventional serial code. This is because by assign workloads into different work items (threads), the OpenCL implementation is acutally functioning as a parallel programm. When the size of problem (N) is relatively small, the differce bettween CPU code and OpenCL is not obvious. The discrepancies in computing time become bigger when we are working on larger scales of the problem, but the number of iteration it takes for both applicaitons are close. The slightly larger number of iteration for OpenCL to converge might due to the serial code is in double percision while the OpenCL is in single percision.\\\\
+
+{\bfseries(2) Comparison between CUDA code and OpenCL GPU implementation.}\\\\
+Similar to the comparison in CPU, I am comparing the kernel runtimes for the CUDA code and OpenCL CPU implementation with N=64, 128, 256. The computing time table is listed below:
+I am comparing the total runtime for the CPU code and OpenCL CPU implementation with N=64, 128, 256. The computing time table is listed below:
+
+% Our first table 
+\begin{table}[H]
+	\centering
+	\label{tab:cg}
+	\begin{tabular}{lcr}
+	\bfseries N & CUDA & OpenCL\\ \hline
+	32 $Jacobi$ & 8.005 ms & 1.988 ms\\
+	32 $Reduce$ & 4.022 ms & 2.072 ms\\
+	64 $Jacobi$ & 22.095 ms & 7.255 ms\\
+	64 $Reduce$ & 7.512 ms & 9.299 ms\\
+	128 $Jacobi$ & 85.602 ms & 27.324 ms\\
+	128 $Reduce$ & 33.716 ms & 28.625 ms\\
+	256 $Jacobi$ & 340.782 ms & 130.455 ms\\
+	256 $Reduce$ & 145.089 ms & 162.481 ms\\
+	\end{tabular}
+	\caption[This is optional caption, without reference]{Table for kernel computing time (ms) using Jacobi method with CUDA/OpenCL application and various N}
+\end{table}
+For $N=64$, $N = 128$ and $N = 256$, I provide the support figures as following. Note that I am using the $<time.h>$ header to compute the total CPU time in OpenCL, which is actually the sum of computing time in different threads. Therefore, the computing time for OpenCL CPU code is calculated by the sum of computing time of Jacobi and Reduction kernel.\\\\
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.9in]{/home/aocai/Pictures/JCUDA64.png}
+	\caption[Optional caption]{CUDA Code Jacobi method on GPU with N=64}
+	\label{fig:JCUDA64}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.85in]{/home/aocai/Pictures/JCUDA128.png}
+	\caption[Optional caption]{CUDA Code Jacobi method on GPU with N=128}
+	\label{fig:JCUDA128}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=0.85in]{/home/aocai/Pictures/JCUDA256.png}
+	\caption[Optional caption]{CUDA Code Jacobi method on GPU with N=256}
+	\label{fig:JCUDA256}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.3in]{/home/aocai/Pictures/JOGPU64.png}
+	\caption[Optional caption]{OpenCL Code Jacobi method on GPU with N=64}
+	\label{fig:JOGPU64}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.3in]{/home/aocai/Pictures/JOGPU128.png}
+	\caption[Optional caption]{OpenCL Code Jacobi method on GPU with N=128}
+	\label{fig:JOGPU128}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[height=1.3in]{/home/aocai/Pictures/JOGPU256.png}
+	\caption[Optional caption]{OpenCL Code Jacobi method on GPU with N=256}
+	\label{fig:JOGPU256}
+\end{figure}
+{\bfseries Discussion:}\\\\
+From the computing time table, we can find that the kernel execution time using OpenCL GPU implementation is faster than the corresponding implementation using the CUDA implementation, in most of the cases. The result is a little bit out of my expectation and here is my explanation:
+On the one side, the $cudaEvent{t}$ system that I used to record kernel execution time might be relatively slower than the $clGetEventProfilingInfo$. Since the time is calculated by sum at every iteration step, the timing calculation might have influence on the total computing time. On the other size, the number of threads I used in CUDA is relatively small comparing with the size of BDIM that I used in OpenCL. Due to the limitation of reduciton kernel, the size N will be prefered to be the multiples of 32. However, it is still interesting to find out the good performance of OpenCL in both CPU and GPU implementations.
+
+%\bibliographystyle{IEEEtran}
+%\bibliographystyle{apacite}
+%\bibliography{References}
+%\addcontentsline{toc}{section}{\numberline{}References}
+%\cleardoublepage
+\end{document}

@@ -143,7 +143,7 @@ int main(int argc, char **argv){
 
   cl_int            err;
 
-  int plat = 0;
+  int plat = 1;
   int dev  = 0;
 
   cl_context context;
@@ -161,7 +161,7 @@ int main(int argc, char **argv){
   const char *sourceFileName2 = "reduce.cl";
   const char *functionName2 = "reduce";
 
-  int BDIM = 16;
+  int BDIM = 512;
   char flags[BUFSIZ];
   sprintf(flags, "-DBDIM=%d", BDIM);
 
@@ -270,9 +270,9 @@ int main(int argc, char **argv){
 		obj += res[j];
 	}
 	
-	if(!(iter%1000)){
+	/*if(!(iter%10000)){
 		printf("Iter: %d, error = %lg\n", iter, sqrt(obj));
-	}
+	}*/
 
 	clEnqueueWriteBuffer(queue, d_u, CL_TRUE, 0, sz, unew, 0, 0, 0);
 	iter++;
