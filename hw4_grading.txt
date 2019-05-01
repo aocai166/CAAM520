@@ -1,0 +1,23 @@
+20/20 points: code runs
+
+11/15 points: good code practices
+- syncthreads unnecessary in global compute_xk
+- use (N+2)x(N+2) thread array vs NxN thread array (wasted threads for compute_xk)
+
+15/15 points: discussion of parallelization strategy 
+
+10/15 points: discussion of code verification
+- differing number of iterations between serial/CUDA code, no comparison of error.
+
+5/15 points: provide throughput and bandwidth
+- computational throughput not provided, total bandwidth not reported
+
+15/15 points: roofline and computational discussion
+
+Extra credit: 5/25 points
+- "line"-based shared memory is the right idea, though it doesn't increase data locality (which is the goal of smem)
+- no need to read b in shared memory (no repeated reads!)
+- no performance analysis. 
+
+-9 -10 + 5 = -14 = 86
+Total: 86/100
