@@ -1,0 +1,18 @@
+Homework:  #5
+Student:   Ao Cai
+GitHub ID: aocai166
+
+Points: 100/100
+
+General remarks:
+
+[x] Correct finite difference discretization of Poisson's problem (5 pts.)
+[x] Correct algorithm for Jacobi solver (5 pts.)
+[x] Working OpenCL implementation (20 pts.)
+[x] Verification of OpenCL code based on errors (10 pts.)
+[x] Comparison of errors to serial code (10 pts.)
+[x] Comparison of errors to GPU code (10 pts.)
+[x] Runtimes for OpenCL code (10 pts.)
+[x] Runtimes for CPU code (10 pts.)
+[x] Runtimes for GPU code (10 pts.)
+[x] Discussion of results (10 pts.)
